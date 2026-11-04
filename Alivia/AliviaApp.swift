@@ -1,9 +1,10 @@
 import SwiftUI
 
-@main struct AliviaApp: App {
+@main
+struct AliviaApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppNavigation()
         }
     }
 }

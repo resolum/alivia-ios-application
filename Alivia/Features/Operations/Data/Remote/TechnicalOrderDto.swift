@@ -22,7 +22,21 @@ struct TechnicalOrderDto: Decodable {
     var startedAt: String?
     var completedAt: String?
     var installedDevices: [InstalledDeviceDto]?
+    var incident: IncidentSummaryDto?
 }
+
+/// The incident a maintenance order attends, as the family reported it.
+struct IncidentSummaryDto: Decodable {
+    var id: Int64?
+    var code: String?
+    var status: String?
+    var problemType: String?
+    var description: String?
+    var occurredAt: String?
+    var device: InstalledDeviceDto?
+}
+
+struct MaintenanceResultRequestDto: Encodable { let diagnosis: String; let workPerformed: String }
 
 struct InstalledDeviceDto: Decodable {
     var alias: String?
@@ -69,10 +83,26 @@ enum TechnicalOrderMapper {
             completionNotes: dto.completionNotes,
             startedAt: startedAt,
             completedAt: InstantParser.parse(dto.completedAt),
-            installedDevices: (dto.installedDevices ?? []).compactMap { device in
-                guard let kind = device.type.flatMap(DeviceType.init(rawValue:)) else { return nil }
-                return InstalledDevice(alias: device.alias ?? "", macAddress: device.macAddress ?? "", type: kind)
-            }
+            installedDevices: (dto.installedDevices ?? []).compactMap(device),
+            incident: dto.incident.flatMap(incident)
+        )
+    }
+
+    private static func device(_ dto: InstalledDeviceDto) -> InstalledDevice? {
+        guard let kind = dto.type.flatMap(DeviceType.init(rawValue:)) else { return nil }
+        return InstalledDevice(alias: dto.alias ?? "", macAddress: dto.macAddress ?? "", type: kind)
+    }
+
+    private static func incident(_ dto: IncidentSummaryDto) -> IncidentSummary? {
+        guard let id = dto.id else { return nil }
+        return IncidentSummary(
+            id: id,
+            code: dto.code ?? "INC-\(id)",
+            status: dto.status.flatMap(IncidentStatus.init(rawValue:)),
+            problem: dto.problemType.flatMap(IncidentProblem.init(rawValue:)) ?? .other,
+            description: dto.description ?? "",
+            occurredAt: InstantParser.parse(dto.occurredAt),
+            device: dto.device.flatMap(device)
         )
     }
 
@@ -109,5 +139,18 @@ final class TechnicalOrderFacadeService {
     func recordInstallation(_ orderId: Int64, result: String, notes: String?) async throws -> TechnicalOrderDto {
         try await client.send("POST", "api/v1/technical-orders/\(orderId)/installation-result",
                               body: InstallationResultRequestDto(result: result, notes: notes))
+    }
+
+    func evaluateIncident(_ orderId: Int64) async throws -> TechnicalOrderDto {
+        try await client.send("POST", "api/v1/technical-orders/\(orderId)/incident-evaluation")
+    }
+
+    func confirmVisit(_ orderId: Int64) async throws -> TechnicalOrderDto {
+        try await client.send("POST", "api/v1/technical-orders/\(orderId)/visit-confirmation")
+    }
+
+    func recordMaintenance(_ orderId: Int64, diagnosis: String, workPerformed: String) async throws -> TechnicalOrderDto {
+        try await client.send("POST", "api/v1/technical-orders/\(orderId)/maintenance-result",
+                              body: MaintenanceResultRequestDto(diagnosis: diagnosis, workPerformed: workPerformed))
     }
 }

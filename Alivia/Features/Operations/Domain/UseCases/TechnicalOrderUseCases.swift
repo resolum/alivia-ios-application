@@ -77,3 +77,36 @@ struct CompleteInstallationUseCase {
         return await repository.recordInstallation(order.id, result: result, notes: cleanNotes)
     }
 }
+
+/// Moves the incident of a maintenance order one step: Registrada → En evaluación when the technician reviewed
+/// the report, then En evaluación → Visita programada when the technician confirms the visit.
+struct AdvanceIncidentUseCase {
+    let repository: TechnicalOrderRepository
+
+    func callAsFunction(_ order: TechnicalOrder) async -> NetworkResult<TechnicalOrder> {
+        switch order.incidentAction {
+        case .evaluate: return await repository.evaluateIncident(order.id)
+        case .confirmVisit: return await repository.confirmVisit(order.id)
+        default: return .error("La incidencia no tiene un paso pendiente de evaluación o confirmación.")
+        }
+    }
+}
+
+/// Closes the incident of a started maintenance order: what the technician found and what was done.
+/// The backend marks the order completed and the family sees the incident as resolved.
+struct ResolveIncidentUseCase {
+    static let maxResolution = 500
+    let repository: TechnicalOrderRepository
+
+    func callAsFunction(_ order: TechnicalOrder, diagnosis: String, workPerformed: String) async -> NetworkResult<TechnicalOrder> {
+        let cleanDiagnosis = diagnosis.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanWork = workPerformed.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !order.awaitsResolution { return .error("Inicia la atención antes de registrar la resolución.") }
+        if cleanDiagnosis.isEmpty { return .error("Describe el diagnóstico del dispositivo.") }
+        if cleanWork.isEmpty { return .error("Describe el trabajo realizado.") }
+        if cleanDiagnosis.count > Self.maxResolution || cleanWork.count > Self.maxResolution {
+            return .error("Cada campo admite hasta \(Self.maxResolution) caracteres.")
+        }
+        return await repository.resolveIncident(order.id, diagnosis: cleanDiagnosis, workPerformed: cleanWork)
+    }
+}

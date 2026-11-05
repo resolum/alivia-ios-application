@@ -139,4 +139,9 @@ private final class FakeOrderRepository: TechnicalOrderRepository {
     func recordInstallation(_ orderId: Int64, result: InstallationResult, notes: String?) async -> NetworkResult<TechnicalOrder> {
         .success(anyOrder())
     }
+    func evaluateIncident(_ orderId: Int64) async -> NetworkResult<TechnicalOrder> { .success(anyOrder()) }
+    func confirmVisit(_ orderId: Int64) async -> NetworkResult<TechnicalOrder> { .success(anyOrder()) }
+    func resolveIncident(_ orderId: Int64, diagnosis: String, workPerformed: String) async -> NetworkResult<TechnicalOrder> {
+        .success(anyOrder())
+    }
 }

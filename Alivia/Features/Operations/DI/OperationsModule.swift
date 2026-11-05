@@ -12,4 +12,6 @@ enum OperationsModule {
     static func registerDevice() -> RegisterDeviceUseCase { RegisterDeviceUseCase(repository: repository) }
     static func removeDevice() -> RemoveDeviceUseCase { RemoveDeviceUseCase(repository: repository) }
     static func completeInstallation() -> CompleteInstallationUseCase { CompleteInstallationUseCase(repository: repository) }
+    static func advanceIncident() -> AdvanceIncidentUseCase { AdvanceIncidentUseCase(repository: repository) }
+    static func resolveIncident() -> ResolveIncidentUseCase { ResolveIncidentUseCase(repository: repository) }
 }

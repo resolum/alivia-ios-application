@@ -76,6 +76,9 @@ struct OrderCompletedView: View {
         if order.installationResult == .approved {
             return "El hogar quedó en servicio con \(order.installedDevices.count) dispositivos. La orden está disponible en tu historial."
         }
+        if order.serviceType == .maintenance {
+            return "La incidencia \(order.incident?.code ?? "de la familia") quedó resuelta; la familia ya la ve cerrada en la web."
+        }
         return "La orden se ha sincronizado y estará disponible en tu historial."
     }
 }

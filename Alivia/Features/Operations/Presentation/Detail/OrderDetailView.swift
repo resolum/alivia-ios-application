@@ -6,17 +6,21 @@ struct OrderDetailView: View {
     let onOpenEvaluation: (Int64) -> Void
     let onOpenInstallation: (Int64) -> Void
     let onOpenCompleted: (Int64) -> Void
+    let onOpenResolve: (Int64) -> Void
     @State private var viewModel: OrderDetailViewModel
 
     init(orderId: Int64, onBack: @escaping () -> Void, onOpenEvaluation: @escaping (Int64) -> Void,
-         onOpenInstallation: @escaping (Int64) -> Void, onOpenCompleted: @escaping (Int64) -> Void) {
+         onOpenInstallation: @escaping (Int64) -> Void, onOpenCompleted: @escaping (Int64) -> Void,
+         onOpenResolve: @escaping (Int64) -> Void = { _ in }) {
         self.orderId = orderId
         self.onBack = onBack
         self.onOpenEvaluation = onOpenEvaluation
         self.onOpenInstallation = onOpenInstallation
         self.onOpenCompleted = onOpenCompleted
+        self.onOpenResolve = onOpenResolve
         _viewModel = State(initialValue: OrderDetailViewModel(orderId: orderId, getOrder: OperationsModule.getOrder(),
-                                                              startOrder: OperationsModule.startOrder()))
+                                                              startOrder: OperationsModule.startOrder(),
+                                                              advanceIncident: OperationsModule.advanceIncident()))
     }
 
     var body: some View {
@@ -60,12 +64,47 @@ struct OrderDetailView: View {
         switch started.serviceType {
         case .evaluation: onOpenEvaluation(started.id)
         case .installation: onOpenInstallation(started.id)
-        case .maintenance: break
+        case .maintenance: onOpenResolve(started.id)
         }
     }
 
     @ViewBuilder
     private func actions(_ order: TechnicalOrder) -> some View {
+        VStack(spacing: 8) {
+            if let error = viewModel.advanceError { ErrorBanner(message: error) }
+            stepActions(order)
+        }
+    }
+
+    @ViewBuilder
+    private func stepActions(_ order: TechnicalOrder) -> some View {
+        switch order.incidentAction {
+        case .evaluate:
+            VStack(spacing: 8) {
+                PrimaryButton(text: "Marcar como evaluada", icon: "checklist", busy: viewModel.advancing, container: AliviaColor.navy) {
+                    Task { await viewModel.advance() }
+                }
+                Text("Revisaste el reporte de la familia: la incidencia pasa a En evaluación")
+                    .font(AliviaFont.bodySmall).foregroundStyle(AliviaColor.inkMuted).multilineTextAlignment(.center)
+            }
+        case .confirmVisit:
+            VStack(spacing: 8) {
+                PrimaryButton(text: "Confirmar visita", icon: "calendar.badge.checkmark", busy: viewModel.advancing,
+                              container: AliviaColor.navy) {
+                    Task { await viewModel.advance() }
+                }
+                Text("La familia verá la visita programada para \(Formats.day(order.date)) · \(Formats.window(order.startTime, order.endTime))")
+                    .font(AliviaFont.bodySmall).foregroundStyle(AliviaColor.inkMuted).multilineTextAlignment(.center)
+            }
+        case .resolve:
+            PrimaryButton(text: "Registrar resolución", icon: "checkmark.circle", container: AliviaColor.navy) { onOpenResolve(order.id) }
+        default:
+            progressActions(order)
+        }
+    }
+
+    @ViewBuilder
+    private func progressActions(_ order: TechnicalOrder) -> some View {
         switch (order.progress, order.serviceType) {
         case (.scheduled, _):
             VStack(spacing: 8) {
@@ -82,8 +121,7 @@ struct OrderDetailView: View {
                 onOpenInstallation(order.id)
             }
         case (.inProgress, _):
-            Text("La atención está en proceso. El cierre de incidencias se registra desde la central.")
-                .font(AliviaFont.bodyMedium).foregroundStyle(AliviaColor.inkMuted).multilineTextAlignment(.center)
+            PrimaryButton(text: "Registrar resolución", icon: "checkmark.circle", container: AliviaColor.navy) { onOpenResolve(order.id) }
         case (.completed, _):
             PrimaryButton(text: "Ver resumen", icon: "checkmark.circle", container: AliviaColor.navy) { onOpenCompleted(order.id) }
         case (.canceled, _):
@@ -101,7 +139,7 @@ private struct OrderBody: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     TypePill(type: order.serviceType)
-                    ProgressPill(progress: order.progress)
+                    OrderStatusPill(order: order)
                 }
                 Text(order.homeName).font(AliviaFont.headlineSmall).foregroundStyle(AliviaColor.navy)
                 HStack(spacing: 8) {
@@ -163,8 +201,12 @@ private struct OrderBody: View {
                         }
                     case .maintenance:
                         SectionLabel(text: "Problema reportado", color: AliviaColor.danger)
-                        Text("Incidencia #\(order.incidentId.map(String.init) ?? "")").font(AliviaFont.titleMedium).foregroundStyle(AliviaColor.navy)
-                        Text("Revisa el dispositivo reportado por la familia.").font(AliviaFont.bodyMedium).foregroundStyle(AliviaColor.ink)
+                        if let incident = order.incident {
+                            IncidentContent(incident: incident)
+                        } else {
+                            Text("Incidencia #\(order.incidentId.map(String.init) ?? "")").font(AliviaFont.titleMedium).foregroundStyle(AliviaColor.navy)
+                            Text("Revisa el dispositivo reportado por la familia.").font(AliviaFont.bodyMedium).foregroundStyle(AliviaColor.ink)
+                        }
                     }
                     if let notes = order.completionNotes {
                         Divider().overlay(AliviaColor.outline)
@@ -173,6 +215,40 @@ private struct OrderBody: View {
                 }
             }
             .padding(16)
+        }
+    }
+}
+
+/// The incident as the family reported it: code, problem, device and their description.
+struct IncidentCard: View {
+    let incident: IncidentSummary
+
+    var body: some View {
+        AliviaCard {
+            SectionLabel(text: "Problema reportado", color: AliviaColor.danger)
+            IncidentContent(incident: incident)
+        }
+    }
+}
+
+struct IncidentContent: View {
+    let incident: IncidentSummary
+
+    var body: some View {
+        Text("\(incident.code) · \(incident.problem.label)").font(AliviaFont.titleMedium).foregroundStyle(AliviaColor.navy)
+        if let device = incident.device {
+            HStack(spacing: 8) {
+                Image(systemName: "cpu").font(.system(size: 16)).foregroundStyle(AliviaColor.tealDark)
+                Text("\(device.alias) · \(device.type.label)").font(AliviaFont.bodyMedium).foregroundStyle(AliviaColor.ink)
+                Spacer()
+                Text(device.macAddress).font(AliviaFont.bodySmall).foregroundStyle(AliviaColor.inkMuted)
+            }
+        }
+        if !incident.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Text("“\(incident.description)”").font(AliviaFont.bodyMedium).foregroundStyle(AliviaColor.ink)
+        }
+        if let occurredAt = incident.occurredAt {
+            Text("Ocurrió \(Formats.moment(occurredAt))").font(AliviaFont.bodySmall).foregroundStyle(AliviaColor.inkMuted)
         }
     }
 }

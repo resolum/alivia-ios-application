@@ -38,6 +38,12 @@ final class SignInRulesTests: XCTestCase {
         XCTAssertNil(restored)
         XCTAssertNil(tokens.session)
     }
+
+    func testShowsTheSignInFailuresInSpanish() {
+        XCTAssertEqual(AuthRepositoryImpl.invalidCredentials, AuthRepositoryImpl.signInMessage(code: 401, fallback: "x"))
+        XCTAssertEqual(AuthRepositoryImpl.accountNotEnabled, AuthRepositoryImpl.signInMessage(code: 403, fallback: "The account is not active."))
+        XCTAssertEqual("Sin conexión", AuthRepositoryImpl.signInMessage(code: nil, fallback: "Sin conexión"))
+    }
 }
 
 private final class FakeAuthRepository: AuthRepository {

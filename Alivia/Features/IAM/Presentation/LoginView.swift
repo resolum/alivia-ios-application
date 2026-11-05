@@ -19,7 +19,7 @@ struct LoginView: View {
 
                 Text("Correo electrónico").font(AliviaFont.labelMedium).foregroundStyle(AliviaColor.ink)
                 field {
-                    TextField("tecnico@alivia.pe", text: $viewModel.email)
+                    TextField("correo@ejemplo.com", text: $viewModel.email)
                         .textContentType(.username)
                         .emailKeyboard()
                         .submitLabel(.next)

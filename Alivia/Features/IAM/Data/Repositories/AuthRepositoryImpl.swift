@@ -2,6 +2,17 @@ import Foundation
 
 final class AuthRepositoryImpl: AuthRepository {
     static let notAllowed = "Esta aplicación es para técnicos y cuidadores. Ingresa desde la web de Alivia."
+    static let invalidCredentials = "Correo o contraseña incorrectos."
+    static let accountNotEnabled = "Tu cuenta aún no está habilitada. Revisa el correo de verificación o comunícate con soporte de Alivia."
+
+    /// Translates the sign-in failures the backend reports into messages the login screen can show.
+    static func signInMessage(code: Int?, fallback: String) -> String {
+        switch code {
+        case 400, 401: return invalidCredentials
+        case 403: return accountNotEnabled
+        default: return fallback
+        }
+    }
 
     private let facade: AuthFacadeService
     private let tokens: TokenStore
@@ -16,7 +27,7 @@ final class AuthRepositoryImpl: AuthRepository {
         let result = await BaseRepository.safeCall { try await facade.signIn(email: credentials.email, password: credentials.password) }
         switch result {
         case .error(let message, let code):
-            return code == 401 ? .error("Correo o contraseña incorrectos.", code: 401) : .error(message, code: code)
+            return .error(AuthRepositoryImpl.signInMessage(code: code, fallback: message), code: code)
         case .success(let dto):
             guard let stored = SignInMapper.toStoredSession(dto) else { return .error("La respuesta del servidor no es válida.") }
             let session = SignInMapper.toSession(stored)

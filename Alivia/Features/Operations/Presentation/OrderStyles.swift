@@ -80,6 +80,25 @@ struct ProgressPill: View {
     }
 }
 
+/// The incident stage for maintenance orders (Registrada, En evaluación…), the order progress otherwise.
+struct OrderStatusPill: View {
+    let order: TechnicalOrder
+
+    var body: some View {
+        if order.serviceType == .maintenance, let status = order.incident?.status {
+            switch status {
+            case .open, .inEvaluation, .inProgress:
+                Pill(text: status.label, container: AliviaColor.warningSoft, content: AliviaColor.navy, dot: AliviaColor.warning)
+            case .scheduled: Pill(text: status.label, container: AliviaColor.navySoft, content: AliviaColor.navy)
+            case .resolved: Pill(text: status.label, container: AliviaColor.tealSoft, content: AliviaColor.tealDark)
+            case .canceled: Pill(text: status.label, container: AliviaColor.surfaceMuted, content: AliviaColor.inkMuted)
+            }
+        } else {
+            ProgressPill(progress: order.progress)
+        }
+    }
+}
+
 struct TypePill: View {
     let type: ServiceType
 

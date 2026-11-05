@@ -31,6 +31,18 @@ final class TechnicalOrderRepositoryImpl: TechnicalOrderRepository {
         await one { try await facade.recordInstallation(orderId, result: result.rawValue, notes: notes) }
     }
 
+    func evaluateIncident(_ orderId: Int64) async -> NetworkResult<TechnicalOrder> {
+        await one { try await facade.evaluateIncident(orderId) }
+    }
+
+    func confirmVisit(_ orderId: Int64) async -> NetworkResult<TechnicalOrder> {
+        await one { try await facade.confirmVisit(orderId) }
+    }
+
+    func resolveIncident(_ orderId: Int64, diagnosis: String, workPerformed: String) async -> NetworkResult<TechnicalOrder> {
+        await one { try await facade.recordMaintenance(orderId, diagnosis: diagnosis, workPerformed: workPerformed) }
+    }
+
     private func one(_ call: () async throws -> TechnicalOrderDto) async -> NetworkResult<TechnicalOrder> {
         switch await BaseRepository.safeCall(call) {
         case .error(let message, let code): return .error(message, code: code)

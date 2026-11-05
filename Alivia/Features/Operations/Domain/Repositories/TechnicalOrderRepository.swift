@@ -8,4 +8,7 @@ protocol TechnicalOrderRepository: AnyObject {
     func registerDevice(_ orderId: Int64, alias: String, macAddress: String, type: DeviceType) async -> NetworkResult<TechnicalOrder>
     func removeDevice(_ orderId: Int64, macAddress: String) async -> NetworkResult<TechnicalOrder>
     func recordInstallation(_ orderId: Int64, result: InstallationResult, notes: String?) async -> NetworkResult<TechnicalOrder>
+    func evaluateIncident(_ orderId: Int64) async -> NetworkResult<TechnicalOrder>
+    func confirmVisit(_ orderId: Int64) async -> NetworkResult<TechnicalOrder>
+    func resolveIncident(_ orderId: Int64, diagnosis: String, workPerformed: String) async -> NetworkResult<TechnicalOrder>
 }

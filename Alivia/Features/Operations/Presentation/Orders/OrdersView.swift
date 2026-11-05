@@ -145,7 +145,7 @@ struct OrderCard: View {
                     HStack {
                         if isNext { Pill(text: "SIGUIENTE", container: AliviaColor.tealSoft, content: AliviaColor.tealDark) }
                         Spacer()
-                        ProgressPill(progress: order.progress)
+                        OrderStatusPill(order: order)
                     }
                     Text(order.homeName).font(AliviaFont.titleMedium).foregroundStyle(AliviaColor.navy).lineLimit(1)
                     HStack(spacing: 6) {

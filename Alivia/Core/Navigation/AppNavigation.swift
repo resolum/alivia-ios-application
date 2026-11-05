@@ -6,6 +6,7 @@ enum Route: Hashable {
     case evaluation(Int64)
     case installation(Int64)
     case completed(Int64)
+    case resolve(Int64)
 }
 
 enum AppStage: Equatable {
@@ -51,7 +52,8 @@ struct AppNavigation: View {
             OrderDetailView(orderId: id, onBack: back,
                             onOpenEvaluation: { path.append(.evaluation($0)) },
                             onOpenInstallation: { path.append(.installation($0)) },
-                            onOpenCompleted: { path.append(.completed($0)) })
+                            onOpenCompleted: { path.append(.completed($0)) },
+                            onOpenResolve: { path.append(.resolve($0)) })
         case .evaluation(let id):
             EvaluationView(orderId: id, onBack: back) { next in
                 switch next {
@@ -60,6 +62,8 @@ struct AppNavigation: View {
             }
         case .installation(let id):
             InstallationView(orderId: id, onExit: back, onCompleted: { path = [.completed($0)] })
+        case .resolve(let id):
+            ResolveIncidentView(orderId: id, onBack: back, onResolved: { path = [.completed($0)] })
         case .completed(let id):
             OrderCompletedView(orderId: id, onBackToOrders: { path = [] },
                                onOpenSummary: { path = [.order($0)] },

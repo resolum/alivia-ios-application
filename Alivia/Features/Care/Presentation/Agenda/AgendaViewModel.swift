@@ -60,9 +60,12 @@ final class AgendaViewModel {
 
     private let getCareAgenda: GetCareAgendaUseCase
     private let getReminders: GetRemindersUseCase
+    private let scheduler: ReminderNotificationScheduler
+    private var askedForNotifications = false
     private var loadTask: Task<Void, Never>?
 
-    init(getCareAgenda: GetCareAgendaUseCase, getReminders: GetRemindersUseCase) {
+    init(getCareAgenda: GetCareAgendaUseCase, getReminders: GetRemindersUseCase, scheduler: ReminderNotificationScheduler) {
+        self.scheduler = scheduler
         self.getCareAgenda = getCareAgenda
         self.getReminders = getReminders
     }
@@ -80,6 +83,10 @@ final class AgendaViewModel {
         refreshing = refresh
         error = nil
         today = Formats.today()
+        if !askedForNotifications {
+            askedForNotifications = true
+            await scheduler.requestAuthorizationIfNeeded()
+        }
         let task = Task {
             async let remindersResult = getReminders()
             let result = await getCareAgenda(today: today)
@@ -89,7 +96,10 @@ final class AgendaViewModel {
             case .success(let data): activities = data
             case .error(let message, _): error = message
             }
-            if case .success(let data) = remindersOutcome { reminders = data }
+            if case .success(let data) = remindersOutcome {
+                reminders = data
+                await scheduler.reschedule(data)
+            }
             loading = false
             refreshing = false
         }

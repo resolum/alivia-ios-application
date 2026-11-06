@@ -89,10 +89,7 @@ struct MainView: View {
                 ComingSoonView(icon: MainTab.alerts.icon, title: "Muy pronto", description: "Aquí recibirás las alertas del hogar, con su prioridad y confirmación.")
             }
         case .agenda:
-            VStack(spacing: 0) {
-                ScreenHeader(title: MainTab.agenda.label, onOpenProfile: { tab = .profile })
-                ComingSoonView(icon: MainTab.agenda.icon, title: "Muy pronto", description: "Aquí verás los turnos, actividades y medicamentos de la persona asistida.")
-            }
+            AgendaView(onOpenProfile: { tab = .profile })
         case .profile:
             VStack(spacing: 0) {
                 ScreenHeader(title: "Perfil", subtitle: session.email, onOpenProfile: {})

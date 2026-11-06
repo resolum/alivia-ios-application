@@ -74,6 +74,10 @@ final class CareAgendaFacadeService {
     func medicationAdministration(_ administrationId: String) async throws -> MedicationAdministrationDto {
         try await client.send("GET", "api/v1/medication-administrations/\(administrationId)")
     }
+
+    func recordOutcome(_ administrationId: String, body: MedicationOutcomeRequestDto) async throws -> MedicationAdministrationDto {
+        try await client.send("POST", "api/v1/medication-administrations/\(administrationId)/outcomes", body: body)
+    }
 }
 
 private extension LocalDate {

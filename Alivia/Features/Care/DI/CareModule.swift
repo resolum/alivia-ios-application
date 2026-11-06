@@ -7,4 +7,5 @@ enum CareModule {
     static func getCareAgenda() -> GetCareAgendaUseCase { GetCareAgendaUseCase(repository: repository) }
     static func getReminders() -> GetRemindersUseCase { GetRemindersUseCase(repository: repository) }
     static func getMedicationAdministration() -> GetMedicationAdministrationUseCase { GetMedicationAdministrationUseCase(repository: repository) }
+    static func recordMedicationOutcome() -> RecordMedicationOutcomeUseCase { RecordMedicationOutcomeUseCase(repository: repository) }
 }

@@ -40,12 +40,15 @@ enum MainTab: Hashable {
 struct MainView: View {
     let session: Session
     let onOpenOrder: (Int64) -> Void
+    let onOpenMedication: (String) -> Void
     let onSignOut: () -> Void
     @State private var tab: MainTab
 
-    init(session: Session, onOpenOrder: @escaping (Int64) -> Void, onSignOut: @escaping () -> Void) {
+    init(session: Session, onOpenOrder: @escaping (Int64) -> Void,
+         onOpenMedication: @escaping (String) -> Void = { _ in }, onSignOut: @escaping () -> Void) {
         self.session = session
         self.onOpenOrder = onOpenOrder
+        self.onOpenMedication = onOpenMedication
         self.onSignOut = onSignOut
         _tab = State(initialValue: session.role == .technician ? .orders : .home)
     }
@@ -89,7 +92,7 @@ struct MainView: View {
                 ComingSoonView(icon: MainTab.alerts.icon, title: "Muy pronto", description: "Aquí recibirás las alertas del hogar, con su prioridad y confirmación.")
             }
         case .agenda:
-            AgendaView(onOpenProfile: { tab = .profile })
+            AgendaView(onOpenProfile: { tab = .profile }, onOpenMedication: onOpenMedication)
         case .profile:
             VStack(spacing: 0) {
                 ScreenHeader(title: "Perfil", subtitle: session.email, onOpenProfile: {})

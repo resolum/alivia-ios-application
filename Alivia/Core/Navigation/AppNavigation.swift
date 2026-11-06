@@ -7,6 +7,7 @@ enum Route: Hashable {
     case installation(Int64)
     case completed(Int64)
     case resolve(Int64)
+    case medication(String)
 }
 
 enum AppStage: Equatable {
@@ -32,7 +33,8 @@ struct AppNavigation: View {
                 }
             case .main(let session):
                 NavigationStack(path: $path) {
-                    MainView(session: session, onOpenOrder: { path.append(.order($0)) }, onSignOut: signOut)
+                    MainView(session: session, onOpenOrder: { path.append(.order($0)) },
+                             onOpenMedication: { path.append(.medication($0)) }, onSignOut: signOut)
                         .hidesNavigationBar()
                         .navigationDestination(for: Route.self, destination: destination)
                 }
@@ -64,6 +66,8 @@ struct AppNavigation: View {
             InstallationView(orderId: id, onExit: back, onCompleted: { path = [.completed($0)] })
         case .resolve(let id):
             ResolveIncidentView(orderId: id, onBack: back, onResolved: { path = [.completed($0)] })
+        case .medication(let id):
+            MedicationDetailView(administrationId: id, onBack: back)
         case .completed(let id):
             OrderCompletedView(orderId: id, onBackToOrders: { path = [] },
                                onOpenSummary: { path = [.order($0)] },

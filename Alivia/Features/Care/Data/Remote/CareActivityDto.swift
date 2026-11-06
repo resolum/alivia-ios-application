@@ -41,6 +41,7 @@ enum CareActivityMapper {
             .compactMap { $0 }.joined(separator: "-")
         return CareActivity(
             id: key,
+            assignmentId: dto.assignmentId,
             title: title.isEmpty ? "Actividad" : title,
             type: type,
             assistedPerson: nonBlank(dto.assistedPerson?.name) ?? "Persona asistida",
@@ -49,7 +50,8 @@ enum CareActivityMapper {
             startTime: start,
             endTime: LocalTime(iso: dto.endTime),
             status: status,
-            recurring: dto.recurring ?? false)
+            recurring: dto.recurring ?? false,
+            priority: dto.priority.flatMap(CarePriority.init(rawValue:)) ?? .routine)
     }
 
     private static func nonBlank(_ value: String?) -> String? {
@@ -64,6 +66,13 @@ final class CareAgendaFacadeService {
 
     func agenda(from: LocalDate, to: LocalDate) async throws -> [CareActivityDto] {
         try await client.send("GET", "api/v1/care-agenda?from=\(from.iso)&to=\(to.iso)")
+    }
+
+    /// Scheduled or in-progress occurrences from yesterday on; same JSON as the agenda.
+    func reminders() async throws -> [CareActivityDto] { try await client.send("GET", "api/v1/reminders") }
+
+    func medicationAdministration(_ administrationId: String) async throws -> MedicationAdministrationDto {
+        try await client.send("GET", "api/v1/medication-administrations/\(administrationId)")
     }
 }
 

@@ -94,21 +94,7 @@ struct MainView: View {
         case .agenda:
             AgendaView(onOpenProfile: { tab = .profile }, onOpenMedication: onOpenMedication)
         case .profile:
-            VStack(spacing: 0) {
-                ScreenHeader(title: "Perfil", subtitle: session.email, onOpenProfile: {})
-                ComingSoonView(icon: MainTab.profile.icon, title: session.email,
-                               description: technician ? "Cuenta de técnico" : "Cuenta de cuidador")
-                Button(action: onSignOut) {
-                    Label("Cerrar sesión", systemImage: "rectangle.portrait.and.arrow.right")
-                        .font(AliviaFont.labelLarge)
-                        .foregroundStyle(AliviaColor.navyButton)
-                        .padding(.horizontal, 24)
-                        .frame(height: 44)
-                        .overlay(Capsule().stroke(AliviaColor.outline, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .padding(24)
-            }
+            ProfileView(session: session, onSignOut: onSignOut)
         }
     }
 }

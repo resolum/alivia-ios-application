@@ -6,7 +6,7 @@ struct GetCareAgendaUseCase {
     static let daysAhead = 14
     let repository: CareAgendaRepository
 
-    func callAsFunction(today: LocalDate = Formats.today()) async -> NetworkResult<[CareActivity]> {
+    func callAsFunction(today: LocalDate) async -> NetworkResult<[CareActivity]> {
         await repository.agenda(from: today.plusDays(-Self.daysBack), to: today.plusDays(Self.daysAhead))
     }
 }

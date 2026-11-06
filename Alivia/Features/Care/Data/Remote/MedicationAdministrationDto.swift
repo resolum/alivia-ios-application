@@ -35,7 +35,7 @@ enum MedicationAdministrationMapper {
             startTime: start,
             endTime: LocalTime(iso: dto.endTime),
             status: dto.status.flatMap(AdministrationStatus.init(rawValue:)) ?? .pending,
-            outcome: dto.outcome.flatMap(outcome))
+            outcome: dto.outcome.flatMap { outcome($0) })
     }
 
     private static func outcome(_ dto: MedicationAdministrationDto.OutcomeDto) -> AdministrationOutcome? {

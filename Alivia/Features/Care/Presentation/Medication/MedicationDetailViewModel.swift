@@ -10,8 +10,8 @@ final class MedicationDetailViewModel {
     var recording = false
     var result: AdministrationResult = .administered { didSet { recordError = nil } }
     var occurredAt = Date() { didSet { recordError = nil } }
-    var reason = "" { didSet { reason = String(reason.prefix(Self.maxText)); recordError = nil } }
-    var notes = "" { didSet { notes = String(notes.prefix(Self.maxText)); recordError = nil } }
+    var reason = "" { didSet { if reason.count > Self.maxText { reason = String(reason.prefix(Self.maxText)) }; recordError = nil } }
+    var notes = "" { didSet { if notes.count > Self.maxText { notes = String(notes.prefix(Self.maxText)) }; recordError = nil } }
     private(set) var saving = false
     private(set) var recordError: String?
 

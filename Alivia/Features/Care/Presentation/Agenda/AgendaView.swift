@@ -2,7 +2,11 @@ import SwiftUI
 
 struct AgendaView: View {
     let onOpenProfile: () -> Void
-    @State private var viewModel = AgendaViewModel(getCareAgenda: CareModule.getCareAgenda())
+    let onOpenMedication: (String) -> Void
+    let onOpenActivity: (CareActivity) -> Void
+    @State private var viewModel = AgendaViewModel(getCareAgenda: CareModule.getCareAgenda(),
+                                                   getReminders: CareModule.getReminders(),
+                                                   scheduler: CareModule.reminderScheduler)
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -11,7 +15,11 @@ struct AgendaView: View {
             ScreenHeader(title: "Agenda", subtitle: snapshot.summary, onOpenProfile: onOpenProfile)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    SectionLabel(text: "Lista de actividades")
+                    if !viewModel.reminders.isEmpty {
+                        GroupHeader(title: "Recordatorios pendientes", count: viewModel.reminders.count, noun: "recordatorio")
+                        ForEach(viewModel.reminders) { ReminderCard(reminder: $0, onOpenMedication: onOpenMedication, onOpenActivity: onOpenActivity) }
+                    }
+                    SectionLabel(text: "Lista de actividades").padding(.top, 8)
                     if let error = viewModel.error {
                         VStack(alignment: .leading, spacing: 4) {
                             ErrorBanner(message: error)
@@ -26,7 +34,7 @@ struct AgendaView: View {
                         if groups.isEmpty && viewModel.error == nil { EmptyAgenda() }
                         ForEach(groups) { group in
                             GroupHeader(title: group.kind.title, count: group.activities.count)
-                            ForEach(group.activities) { ActivityCard(activity: $0) }
+                            ForEach(group.activities) { ActivityCard(activity: $0, onOpenMedication: onOpenMedication, onOpenActivity: onOpenActivity) }
                         }
                     }
                 }
@@ -44,15 +52,21 @@ struct AgendaView: View {
     }
 }
 
+/// Medications open their administration; every other activity opens the activity detail.
+private func open(_ activity: CareActivity, _ onOpenMedication: (String) -> Void, _ onOpenActivity: (CareActivity) -> Void) {
+    if let administrationId = activity.administrationId { onOpenMedication(administrationId) } else { onOpenActivity(activity) }
+}
+
 private struct GroupHeader: View {
     let title: String
     let count: Int
+    var noun = "actividad"
 
     var body: some View {
         HStack {
             Text(title).font(AliviaFont.titleSmall).foregroundStyle(AliviaColor.ink)
             Spacer()
-            Text(count == 1 ? "1 actividad" : "\(count) actividades").font(AliviaFont.bodySmall).foregroundStyle(AliviaColor.inkMuted)
+            Text(count == 1 ? "1 \(noun)" : "\(count) \(noun)s").font(AliviaFont.bodySmall).foregroundStyle(AliviaColor.inkMuted)
         }
         .padding(.top, 4)
     }
@@ -60,8 +74,16 @@ private struct GroupHeader: View {
 
 private struct ActivityCard: View {
     let activity: CareActivity
+    let onOpenMedication: (String) -> Void
+    let onOpenActivity: (CareActivity) -> Void
 
     var body: some View {
+        Button { open(activity, onOpenMedication, onOpenActivity) } label: { content }
+            .buttonStyle(.plain)
+            .accessibilityHint(activity.administrationId != nil ? "Abre el detalle del medicamento" : "Abre el detalle de la actividad")
+    }
+
+    private var content: some View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
                 Circle().fill(AliviaColor.navySoft).frame(width: 40, height: 40)
@@ -86,6 +108,7 @@ private struct ActivityCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AliviaColor.surface, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(AliviaColor.outline, lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .combine)
     }
 
@@ -94,6 +117,45 @@ private struct ActivityCard: View {
             Image(systemName: icon).font(.system(size: 13)).foregroundStyle(AliviaColor.inkMuted)
             Text(text).font(AliviaFont.bodyMedium).foregroundStyle(AliviaColor.ink).lineLimit(1)
         }
+    }
+}
+
+private struct ReminderCard: View {
+    let reminder: CareActivity
+    let onOpenMedication: (String) -> Void
+    let onOpenActivity: (CareActivity) -> Void
+
+    var body: some View {
+        Button { open(reminder, onOpenMedication, onOpenActivity) } label: { content }
+            .buttonStyle(.plain)
+            .accessibilityHint(reminder.administrationId != nil ? "Abre el detalle del medicamento" : "Abre el detalle de la actividad")
+    }
+
+    private var content: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                Circle().fill(AliviaColor.tealSoft).frame(width: 40, height: 40)
+                Image(systemName: reminder.type.icon).font(.system(size: 17)).foregroundStyle(AliviaColor.tealDark)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(Formats.time(reminder.startTime)).font(AliviaFont.labelMedium).foregroundStyle(AliviaColor.navy)
+                    Spacer()
+                    Pill(text: reminder.priority.label, container: reminder.priority.container, content: reminder.priority.content)
+                }
+                Text(reminder.title).font(AliviaFont.titleMedium).foregroundStyle(AliviaColor.navy)
+                HStack(spacing: 6) {
+                    Image(systemName: "person").font(.system(size: 13)).foregroundStyle(AliviaColor.inkMuted)
+                    Text(reminder.assistedPerson).font(AliviaFont.bodyMedium).foregroundStyle(AliviaColor.ink).lineLimit(1)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AliviaColor.surface, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AliviaColor.outline, lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -122,6 +184,35 @@ extension CareActivityType {
         case .bath: return "shower"
         case .exercise: return "figure.walk"
         case .other: return "checklist"
+        }
+    }
+}
+
+extension CarePriority {
+    var label: String {
+        switch self {
+        case .high: return "Alta"
+        case .medium: return "Media"
+        case .low: return "Baja"
+        case .routine: return "Rutina"
+        }
+    }
+
+    var container: Color {
+        switch self {
+        case .high: return AliviaColor.dangerSoft
+        case .medium: return AliviaColor.warningSoft
+        case .low: return AliviaColor.tealSoft
+        case .routine: return AliviaColor.surfaceMuted
+        }
+    }
+
+    var content: Color {
+        switch self {
+        case .high: return AliviaColor.danger
+        case .medium: return AliviaColor.warning
+        case .low: return AliviaColor.tealDark
+        case .routine: return AliviaColor.inkMuted
         }
     }
 }

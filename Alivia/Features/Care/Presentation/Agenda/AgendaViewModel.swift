@@ -54,13 +54,20 @@ final class AgendaViewModel {
     private(set) var refreshing = false
     private(set) var error: String?
     private(set) var activities: [CareActivity] = []
+    /// Pending reminders. They load apart from the agenda, and a failure only hides the section.
+    private(set) var reminders: [CareActivity] = []
     private(set) var today = Formats.today()
 
     private let getCareAgenda: GetCareAgendaUseCase
+    private let getReminders: GetRemindersUseCase
+    private let scheduler: ReminderNotificationScheduler
+    private var askedForNotifications = false
     private var loadTask: Task<Void, Never>?
 
-    init(getCareAgenda: GetCareAgendaUseCase) {
+    init(getCareAgenda: GetCareAgendaUseCase, getReminders: GetRemindersUseCase, scheduler: ReminderNotificationScheduler) {
+        self.scheduler = scheduler
         self.getCareAgenda = getCareAgenda
+        self.getReminders = getReminders
     }
 
     var snapshot: AgendaSnapshot { AgendaSnapshot(activities: activities, today: today) }
@@ -76,12 +83,22 @@ final class AgendaViewModel {
         refreshing = refresh
         error = nil
         today = Formats.today()
+        if !askedForNotifications {
+            askedForNotifications = true
+            await scheduler.requestAuthorizationIfNeeded()
+        }
         let task = Task {
+            async let remindersResult = getReminders()
             let result = await getCareAgenda(today: today)
+            let remindersOutcome = await remindersResult
             guard !Task.isCancelled else { return }
             switch result {
             case .success(let data): activities = data
             case .error(let message, _): error = message
+            }
+            if case .success(let data) = remindersOutcome {
+                reminders = data
+                await scheduler.reschedule(data)
             }
             loading = false
             refreshing = false

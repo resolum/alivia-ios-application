@@ -7,7 +7,8 @@ struct MedicationDetailView: View {
     init(administrationId: String, onBack: @escaping () -> Void) {
         self.onBack = onBack
         _viewModel = State(initialValue: MedicationDetailViewModel(
-            administrationId: administrationId, getAdministration: CareModule.getMedicationAdministration()))
+            administrationId: administrationId, getAdministration: CareModule.getMedicationAdministration(),
+            recordOutcome: CareModule.recordMedicationOutcome()))
     }
 
     var body: some View {
@@ -28,10 +29,22 @@ struct MedicationDetailView: View {
                 }
             }
             .frame(maxHeight: .infinity)
+            if let administration = viewModel.administration, administration.canRecord {
+                PrimaryButton(text: "Registrar resultado", icon: "checkmark.circle", container: AliviaColor.navy) {
+                    viewModel.startRecording()
+                }
+                .padding(16)
+                .background(AliviaColor.surface)
+            }
         }
         .background(AliviaColor.background)
         .hidesNavigationBar()
         .task { await viewModel.load() }
+        .sheet(isPresented: $viewModel.recording) {
+            if let administration = viewModel.administration {
+                MedicationOutcomeSheet(viewModel: viewModel, administration: administration)
+            }
+        }
     }
 }
 
@@ -60,7 +73,7 @@ private struct MedicationDetailContent: View {
                     AliviaCard {
                         row(outcome.result.icon, "Resultado", outcome.result.label)
                         if let moment = moment(outcome) { row("clock.badge.checkmark", "Hora real", moment) }
-                        row("hourglass", "Registro", outcome.late ? "Tardío" : "A tiempo")
+                        if outcome.late { row("hourglass", "Registro", "Registro tardío") }
                         if let reason = outcome.reason { row("text.bubble", "Motivo", reason) }
                         if let notes = outcome.notes { row("note.text", "Notas", notes) }
                     }

@@ -41,14 +41,17 @@ struct MainView: View {
     let session: Session
     let onOpenOrder: (Int64) -> Void
     let onOpenMedication: (String) -> Void
+    let onOpenActivity: (CareActivity) -> Void
     let onSignOut: () -> Void
     @State private var tab: MainTab
 
     init(session: Session, onOpenOrder: @escaping (Int64) -> Void,
-         onOpenMedication: @escaping (String) -> Void = { _ in }, onSignOut: @escaping () -> Void) {
+         onOpenMedication: @escaping (String) -> Void = { _ in },
+         onOpenActivity: @escaping (CareActivity) -> Void = { _ in }, onSignOut: @escaping () -> Void) {
         self.session = session
         self.onOpenOrder = onOpenOrder
         self.onOpenMedication = onOpenMedication
+        self.onOpenActivity = onOpenActivity
         self.onSignOut = onSignOut
         _tab = State(initialValue: session.role == .technician ? .orders : .home)
     }
@@ -92,23 +95,9 @@ struct MainView: View {
                 ComingSoonView(icon: MainTab.alerts.icon, title: "Muy pronto", description: "Aquí recibirás las alertas del hogar, con su prioridad y confirmación.")
             }
         case .agenda:
-            AgendaView(onOpenProfile: { tab = .profile }, onOpenMedication: onOpenMedication)
+            AgendaView(onOpenProfile: { tab = .profile }, onOpenMedication: onOpenMedication, onOpenActivity: onOpenActivity)
         case .profile:
-            VStack(spacing: 0) {
-                ScreenHeader(title: "Perfil", subtitle: session.email, onOpenProfile: {})
-                ComingSoonView(icon: MainTab.profile.icon, title: session.email,
-                               description: technician ? "Cuenta de técnico" : "Cuenta de cuidador")
-                Button(action: onSignOut) {
-                    Label("Cerrar sesión", systemImage: "rectangle.portrait.and.arrow.right")
-                        .font(AliviaFont.labelLarge)
-                        .foregroundStyle(AliviaColor.navyButton)
-                        .padding(.horizontal, 24)
-                        .frame(height: 44)
-                        .overlay(Capsule().stroke(AliviaColor.outline, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .padding(24)
-            }
+            ProfileView(session: session, onSignOut: onSignOut)
         }
     }
 }

@@ -33,4 +33,12 @@ struct MedicationAdministration: Hashable, Sendable {
     let endTime: LocalTime?
     let status: AdministrationStatus
     let outcome: AdministrationOutcome?
+
+    /// The caregiver can still register what happened with the dose.
+    var canRecord: Bool { status == .pending || status == .missed }
+
+    /// Scheduled start as a moment in Lima, the earliest time a result can carry.
+    var scheduledStart: Date {
+        LocalDate.calendar.date(bySettingHour: startTime.hour, minute: startTime.minute, second: 0, of: date.date) ?? date.date
+    }
 }

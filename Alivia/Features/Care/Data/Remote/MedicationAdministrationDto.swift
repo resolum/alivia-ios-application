@@ -21,6 +21,13 @@ struct MedicationAdministrationDto: Decodable {
     }
 }
 
+struct MedicationOutcomeRequestDto: Encodable {
+    let result: String
+    let occurredAt: String
+    let reason: String?
+    let notes: String?
+}
+
 enum MedicationAdministrationMapper {
     static func toDomain(_ dto: MedicationAdministrationDto) -> MedicationAdministration? {
         guard let id = dto.administrationId,

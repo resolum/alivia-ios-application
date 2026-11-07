@@ -3,8 +3,10 @@ import SwiftUI
 struct AgendaView: View {
     let onOpenProfile: () -> Void
     let onOpenMedication: (String) -> Void
+    let onOpenActivity: (CareActivity) -> Void
     @State private var viewModel = AgendaViewModel(getCareAgenda: CareModule.getCareAgenda(),
-                                                   getReminders: CareModule.getReminders())
+                                                   getReminders: CareModule.getReminders(),
+                                                   scheduler: CareModule.reminderScheduler)
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -15,7 +17,7 @@ struct AgendaView: View {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if !viewModel.reminders.isEmpty {
                         GroupHeader(title: "Recordatorios pendientes", count: viewModel.reminders.count, noun: "recordatorio")
-                        ForEach(viewModel.reminders) { ReminderCard(reminder: $0, onOpenMedication: onOpenMedication) }
+                        ForEach(viewModel.reminders) { ReminderCard(reminder: $0, onOpenMedication: onOpenMedication, onOpenActivity: onOpenActivity) }
                     }
                     SectionLabel(text: "Lista de actividades").padding(.top, 8)
                     if let error = viewModel.error {
@@ -32,7 +34,7 @@ struct AgendaView: View {
                         if groups.isEmpty && viewModel.error == nil { EmptyAgenda() }
                         ForEach(groups) { group in
                             GroupHeader(title: group.kind.title, count: group.activities.count)
-                            ForEach(group.activities) { ActivityCard(activity: $0, onOpenMedication: onOpenMedication) }
+                            ForEach(group.activities) { ActivityCard(activity: $0, onOpenMedication: onOpenMedication, onOpenActivity: onOpenActivity) }
                         }
                     }
                 }
@@ -48,6 +50,11 @@ struct AgendaView: View {
             if phase == .active { Task { await viewModel.load() } }
         }
     }
+}
+
+/// Medications open their administration; every other activity opens the activity detail.
+private func open(_ activity: CareActivity, _ onOpenMedication: (String) -> Void, _ onOpenActivity: (CareActivity) -> Void) {
+    if let administrationId = activity.administrationId { onOpenMedication(administrationId) } else { onOpenActivity(activity) }
 }
 
 private struct GroupHeader: View {
@@ -68,15 +75,12 @@ private struct GroupHeader: View {
 private struct ActivityCard: View {
     let activity: CareActivity
     let onOpenMedication: (String) -> Void
+    let onOpenActivity: (CareActivity) -> Void
 
     var body: some View {
-        if let administrationId = activity.administrationId {
-            Button { onOpenMedication(administrationId) } label: { content }
-                .buttonStyle(.plain)
-                .accessibilityHint("Abre el detalle del medicamento")
-        } else {
-            content
-        }
+        Button { open(activity, onOpenMedication, onOpenActivity) } label: { content }
+            .buttonStyle(.plain)
+            .accessibilityHint(activity.administrationId != nil ? "Abre el detalle del medicamento" : "Abre el detalle de la actividad")
     }
 
     private var content: some View {
@@ -119,15 +123,12 @@ private struct ActivityCard: View {
 private struct ReminderCard: View {
     let reminder: CareActivity
     let onOpenMedication: (String) -> Void
+    let onOpenActivity: (CareActivity) -> Void
 
     var body: some View {
-        if let administrationId = reminder.administrationId {
-            Button { onOpenMedication(administrationId) } label: { content }
-                .buttonStyle(.plain)
-                .accessibilityHint("Abre el detalle del medicamento")
-        } else {
-            content
-        }
+        Button { open(reminder, onOpenMedication, onOpenActivity) } label: { content }
+            .buttonStyle(.plain)
+            .accessibilityHint(reminder.administrationId != nil ? "Abre el detalle del medicamento" : "Abre el detalle de la actividad")
     }
 
     private var content: some View {

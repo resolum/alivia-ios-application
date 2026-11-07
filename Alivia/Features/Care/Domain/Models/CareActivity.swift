@@ -41,6 +41,17 @@ struct CareActivity: Identifiable, Hashable, Sendable {
     let recurring: Bool
     let priority: CarePriority
 
+    /// Moment the activity starts, in Lima.
+    var startsAt: Date {
+        LocalDate.calendar.date(bySettingHour: startTime.hour, minute: startTime.minute, second: 0, of: date.date) ?? date.date
+    }
+
+    /// Day it ends: the next one when the end time is earlier than the start (an overnight activity).
+    var endDate: LocalDate? {
+        guard let endTime else { return nil }
+        return endTime < startTime ? date.plusDays(1) : date
+    }
+
     /// Id of the medication administration of this occurrence: "<assignmentId>-<yyyyMMdd>".
     var administrationId: String? {
         guard type == .medication, let assignmentId else { return nil }

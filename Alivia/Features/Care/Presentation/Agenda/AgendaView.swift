@@ -12,7 +12,7 @@ struct AgendaView: View {
     var body: some View {
         let snapshot = viewModel.snapshot
         VStack(spacing: 0) {
-            ScreenHeader(title: "Agenda", subtitle: snapshot.summary, onOpenProfile: onOpenProfile)
+            ScreenHeader(title: "Actividades", subtitle: snapshot.summary, onOpenProfile: onOpenProfile)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if !viewModel.reminders.isEmpty {

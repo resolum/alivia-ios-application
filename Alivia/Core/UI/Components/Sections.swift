@@ -138,14 +138,7 @@ struct ScreenHeader: View {
                 if let subtitle { Text(subtitle).font(AliviaFont.bodySmall).foregroundStyle(AliviaColor.inkMuted) }
             }
             Spacer()
-            Button(action: onOpenProfile) {
-                Image(systemName: "person")
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(AliviaColor.navy, in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Perfil")
+            NotificationsButton(action: onOpenProfile)
         }
         .padding(.leading, 16)
         .padding(.trailing, 12)
@@ -154,6 +147,31 @@ struct ScreenHeader: View {
 }
 
 /// Top bar of the screens pushed over the tabs, with the back action.
+/// Round bell of the headers, with the unread marker of the designs.
+struct NotificationsButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "bell")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(AliviaColor.navy)
+                .frame(width: 44, height: 44)
+                .background(AliviaColor.surface, in: Circle())
+                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                .overlay(alignment: .topTrailing) {
+                    // Unread marker, as the designs show it.
+                    Circle().fill(AliviaColor.tealDark)
+                        .frame(width: 9, height: 9)
+                        .overlay(Circle().stroke(AliviaColor.surface, lineWidth: 1.5))
+                        .padding(.top, 9).padding(.trailing, 9)
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Notificaciones")
+    }
+}
+
 struct DetailTopBar<Trailing: View>: View {
     let title: String
     var subtitle: String? = nil

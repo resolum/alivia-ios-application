@@ -9,6 +9,7 @@ enum Route: Hashable {
     case resolve(Int64)
     case medication(String)
     case activity(CareActivity)
+    case notifications
 }
 
 enum AppStage: Equatable {
@@ -36,7 +37,8 @@ struct AppNavigation: View {
                 NavigationStack(path: $path) {
                     MainView(session: session, onOpenOrder: { path.append(.order($0)) },
                              onOpenMedication: { path.append(.medication($0)) },
-                             onOpenActivity: { path.append(.activity($0)) }, onSignOut: signOut)
+                             onOpenActivity: { path.append(.activity($0)) },
+                             onOpenNotifications: { path.append(.notifications) }, onSignOut: signOut)
                         .hidesNavigationBar()
                         .navigationDestination(for: Route.self, destination: destination)
                 }
@@ -72,6 +74,8 @@ struct AppNavigation: View {
             MedicationDetailView(administrationId: id, onBack: back)
         case .activity(let activity):
             ActivityDetailView(activity: activity, onBack: back)
+        case .notifications:
+            NotificationsView(onBack: back)
         case .completed(let id):
             OrderCompletedView(orderId: id, onBackToOrders: { path = [] },
                                onOpenSummary: { path = [.order($0)] },

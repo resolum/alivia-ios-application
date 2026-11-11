@@ -8,8 +8,8 @@ enum AgendaGroupKind: Int, CaseIterable {
         switch self {
         case .today: return "Hoy"
         case .tomorrow: return "Mañana"
-        case .upcoming: return "Próximas"
-        case .past: return "Anteriores"
+        case .upcoming: return "Pasado mañana"
+        case .past: return "Ayer"
         }
     }
 }
@@ -31,8 +31,8 @@ struct AgendaSnapshot {
         return date > today ? .upcoming : .past
     }
 
-    /// Hoy, Mañana, Próximas and Anteriores, skipping the empty ones. Each group runs by date and time;
-    /// Anteriores goes from the most recent to the oldest.
+    /// Hoy, Mañana, Pasado mañana and Ayer, skipping the empty ones. Each group runs by time;
+    /// Ayer goes from the most recent to the oldest.
     var groups: [Group] {
         let byKind = Dictionary(grouping: activities, by: { kind(of: $0.date) })
         return AgendaGroupKind.allCases.compactMap { kind in

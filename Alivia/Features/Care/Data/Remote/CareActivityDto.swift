@@ -20,11 +20,13 @@ struct CareActivityDto: Decodable {
     }
 
     struct AssistedPersonDto: Decodable {
+        var id: Int64?
         var name: String?
     }
 
     struct ResponsibleDto: Decodable {
         var type: String?
+        var id: Int64?
         var name: String?
         var email: String?
     }
@@ -41,6 +43,7 @@ enum CareActivityMapper {
             .compactMap { $0 }.joined(separator: "-")
         return CareActivity(
             id: key,
+            activityId: dto.activity?.id,
             assignmentId: dto.assignmentId,
             title: title.isEmpty ? "Actividad" : title,
             type: type,
@@ -51,7 +54,9 @@ enum CareActivityMapper {
             endTime: LocalTime(iso: dto.endTime),
             status: status,
             recurring: dto.recurring ?? false,
-            priority: dto.priority.flatMap(CarePriority.init(rawValue:)) ?? .routine)
+            priority: dto.priority.flatMap(CarePriority.init(rawValue:)) ?? .routine,
+            assistedPersonProfileId: dto.assistedPerson?.id,
+            responsibleCaregiverId: dto.responsible?.type == "CAREGIVER" ? dto.responsible?.id : nil)
     }
 
     private static func nonBlank(_ value: String?) -> String? {

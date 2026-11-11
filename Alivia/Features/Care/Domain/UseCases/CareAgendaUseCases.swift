@@ -9,6 +9,11 @@ struct GetCareAgendaUseCase {
     func callAsFunction(today: LocalDate) async -> NetworkResult<[CareActivity]> {
         await repository.agenda(from: today.plusDays(-Self.daysBack), to: today.plusDays(Self.daysAhead))
     }
+
+    /// Every occurrence between two dates, for the calendar view.
+    func between(_ from: LocalDate, _ to: LocalDate) async -> NetworkResult<[CareActivity]> {
+        await repository.agenda(from: from, to: to)
+    }
 }
 
 /// Pending reminders of the caregiver, as the backend orders them (by start and priority).

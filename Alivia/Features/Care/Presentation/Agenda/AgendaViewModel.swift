@@ -48,8 +48,48 @@ struct AgendaSnapshot {
     }
 }
 
+enum AgendaViewMode { case list, calendar }
+
 @Observable
 final class AgendaViewModel {
+    var mode: AgendaViewMode = .list
+    /// Only the principal relative creates activities; the rest only follow them.
+    private(set) var canCreate = false
+
+    func loadRole() async {
+        if case .success(let home) = await CaregiverHouseholdService.mine() { canCreate = home?.canPlanActivities ?? false }
+    }
+    /// First day of the month the calendar shows.
+    private(set) var month = LocalDate(year: Formats.today().year, month: Formats.today().month, day: 1)
+    private(set) var monthActivities: [CareActivity] = []
+    private(set) var monthLoading = false
+    var selectedDay = Formats.today()
+
+    var daysWithActivities: Set<LocalDate> { Set(monthActivities.map(\.date)) }
+
+    var selectedDayActivities: [CareActivity] {
+        monthActivities.filter { $0.date == selectedDay }.sorted { $0.startTime < $1.startTime }
+    }
+
+    var daysInMonth: Int { LocalDate.calendar.range(of: .day, in: .month, for: month.date)?.count ?? 30 }
+
+    func moveMonth(_ delta: Int) async {
+        let moved = LocalDate.calendar.date(byAdding: .month, value: delta, to: month.date) ?? month.date
+        month = LocalDate(moved)
+        let today = Formats.today()
+        selectedDay = (today.year == month.year && today.month == month.month) ? today : month
+        await loadMonth()
+    }
+
+    func loadMonth() async {
+        monthLoading = true
+        let last = month.plusDays(daysInMonth - 1)
+        if case .success(let data) = await getCareAgenda.between(month, last) {
+            monthActivities = await CareNetworkService.nameAgendaPeople(data)
+        }
+        monthLoading = false
+    }
+
     private(set) var loading = true
     private(set) var refreshing = false
     private(set) var error: String?
@@ -93,7 +133,7 @@ final class AgendaViewModel {
             let remindersOutcome = await remindersResult
             guard !Task.isCancelled else { return }
             switch result {
-            case .success(let data): activities = data
+            case .success(let data): activities = await CareNetworkService.nameAgendaPeople(data)
             case .error(let message, _): error = message
             }
             if case .success(let data) = remindersOutcome {

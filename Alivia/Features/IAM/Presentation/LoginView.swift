@@ -5,6 +5,7 @@ struct LoginView: View {
     let onSignedIn: (Session) -> Void
     @State private var viewModel = LoginViewModel(signIn: AuthModule.signInUseCase())
     @FocusState private var focus: Field?
+    @State private var recovering = false
 
     private enum Field { case email, password }
 
@@ -50,7 +51,12 @@ struct LoginView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(viewModel.showPassword ? "Ocultar contraseña" : "Mostrar contraseña")
                 }
-                Spacer().frame(height: 16)
+                HStack {
+                    Spacer()
+                    Button("¿Olvidaste tu contraseña?") { recovering = true }
+                        .font(AliviaFont.labelMedium).foregroundStyle(AliviaColor.navy)
+                }
+                .padding(.vertical, 6)
                 if let error = viewModel.error { ErrorBanner(message: error) }
                 Spacer().frame(height: 8)
                 PrimaryButton(text: "Ingresar", enabled: viewModel.canSubmit, busy: viewModel.loading, container: AliviaColor.navy) {
@@ -62,6 +68,7 @@ struct LoginView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .background(AliviaColor.background)
+        .fullScreenCover(isPresented: $recovering) { PasswordRecoveryView(onClose: { recovering = false }) }
         .onChange(of: viewModel.email) { viewModel.clearError() }
         .onChange(of: viewModel.password) { viewModel.clearError() }
     }

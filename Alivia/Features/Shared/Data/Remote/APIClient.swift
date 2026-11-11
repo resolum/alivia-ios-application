@@ -65,6 +65,11 @@ final class APIClient {
         try await request(method, path, payload: body.map(Payload.json) ?? .none)
     }
 
+    /// Same call as `send` for endpoints that answer without a body (202, 204).
+    func sendWithoutResponse(_ method: String, _ path: String, body: (any Encodable)? = nil) async throws {
+        _ = try await perform(method, path, payload: body.map(Payload.json) ?? .none)
+    }
+
     /// Same call as `send` with a `multipart/form-data` body: session token, renewal and errors work the same.
     func sendMultipart<Response: Decodable>(_ method: String, _ path: String, form: MultipartForm,
                                             as type: Response.Type = Response.self) async throws -> Response {

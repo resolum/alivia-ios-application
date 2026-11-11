@@ -15,6 +15,7 @@ enum Formats {
 
     private static let dayMonth = formatter("d 'de' MMMM")
     private static let weekdayDayMonth = formatter("EEEE d 'de' MMMM")
+    private static let weekdayCommaDayMonth = formatter("EEEE, d 'de' MMMM")
     private static let timeFormat = formatter("h:mm a")
     private static let monthYearFormat = formatter("MMMM yyyy")
     private static let shortDay = formatter("d MMM")
@@ -40,6 +41,9 @@ enum Formats {
         default: return capitalizedFirst(weekdayDayMonth.string(from: date.date))
         }
     }
+
+    /// "Jueves, 24 de octubre" for the greeting of the home screen.
+    static func longDay(_ date: LocalDate) -> String { capitalizedFirst(weekdayCommaDayMonth.string(from: date.date)) }
 
     static func monthYear(_ date: LocalDate) -> String { capitalizedFirst(monthYearFormat.string(from: date.date)) }
 

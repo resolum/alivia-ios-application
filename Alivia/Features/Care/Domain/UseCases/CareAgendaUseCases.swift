@@ -1,9 +1,9 @@
 import Foundation
 
-/// Activities of the care agenda from a week back to two weeks ahead of today.
+/// Activities of the care agenda from yesterday to the day after tomorrow; later repetitions stay hidden.
 struct GetCareAgendaUseCase {
-    static let daysBack = 7
-    static let daysAhead = 14
+    static let daysBack = 1
+    static let daysAhead = 2
     let repository: CareAgendaRepository
 
     func callAsFunction(today: LocalDate) async -> NetworkResult<[CareActivity]> {

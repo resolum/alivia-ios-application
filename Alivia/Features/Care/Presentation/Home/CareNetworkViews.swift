@@ -3,6 +3,9 @@ import SwiftUI
 /// Person the caregiver looks after, as `/api/v1/assisted-persons` returns them.
 struct AssistedPerson: Identifiable, Sendable {
     let id: Int64
+    /// Principal relative; the backend needs it to create activities for this person.
+    let relativeId: Int64?
+    let personProfileId: Int64?
     let householdId: Int64?
     let firstName: String
     let lastName: String
@@ -66,10 +69,35 @@ enum CareRole: String, CaseIterable, Comparable, Sendable {
     static func < (lhs: Self, rhs: Self) -> Bool { allCases.firstIndex(of: lhs)! < allCases.firstIndex(of: rhs)! }
 }
 
+/// A caregiver assigned to the assisted person; `isMe` marks the signed-in account.
+struct CareCaregiver: Identifiable, Hashable, Sendable {
+    let id: Int64
+    let userId: Int64?
+    let isMe: Bool
+    var fullName: String? = nil
+}
+
 /// A member of the home's care network; the backend only gives the account and the role.
 struct CareNetworkMember: Hashable, Sendable {
     let userId: Int64
     let role: CareRole
+    var fullName: String? = nil
+}
+
+/// Days of a weekly schedule, as the backend names them; Monday first.
+enum Weekday: String, CaseIterable, Comparable, Sendable {
+    case monday = "MONDAY", tuesday = "TUESDAY", wednesday = "WEDNESDAY", thursday = "THURSDAY", friday = "FRIDAY",
+         saturday = "SATURDAY", sunday = "SUNDAY"
+
+    var initial: String { ["L", "M", "M", "J", "V", "S", "D"][Self.allCases.firstIndex(of: self)!] }
+
+    /// The weekday of a date (Calendar counts Sunday as 1).
+    init(_ date: LocalDate) {
+        let weekday = LocalDate.calendar.component(.weekday, from: date.date)
+        self = Self.allCases[(weekday + 5) % 7]
+    }
+
+    static func < (lhs: Self, rhs: Self) -> Bool { allCases.firstIndex(of: lhs)! < allCases.firstIndex(of: rhs)! }
 }
 
 func careInitials(_ name: String) -> String {
@@ -78,6 +106,8 @@ func careInitials(_ name: String) -> String {
 
 nonisolated private struct AssistedPersonDto: Decodable {
     var id: Int64?
+    var relativeId: Int64?
+    var personProfileId: Int64?
     var householdId: Int64?
     var firstName: String?
     var lastName: String?
@@ -90,10 +120,42 @@ nonisolated private struct AssistedPersonDto: Decodable {
     var emergencyContactPhone: String?
 }
 
+nonisolated private struct CaregiverDto: Decodable {
+    var id: Int64?
+    var userId: Int64?
+    var status: String?
+}
+
+nonisolated private struct CreateCareActivityRequest: Encodable {
+    let relativeId: Int64?
+    let assistedPersonId: Int64
+    let type: String
+    let title: String
+    let description: String?
+}
+
+nonisolated private struct AssignCareActivityRequest: Encodable {
+    let relativeId: Int64?
+    let caregiverId: Int64?
+    let scheduleType: String
+    let days: [String]?
+    let date: String?
+    let startTime: String
+    let endTime: String
+}
+
+nonisolated private struct CompleteActivityRequest: Encodable {
+    let careActivityId: Int64
+    let assignmentId: Int64
+    let date: String
+    let notes: String?
+}
+
 nonisolated private struct HouseholdMemberDto: Decodable {
     var userId: Int64?
     var responsibility: String?
     var status: String?
+    var fullName: String?
 }
 
 enum CareNetworkService {
@@ -106,7 +168,7 @@ enum CareNetworkService {
             return .success(list.compactMap { dto in
                 guard let id = dto.id else { return nil }
                 return AssistedPerson(
-                    id: id, householdId: dto.householdId, firstName: clean(dto.firstName) ?? "", lastName: clean(dto.lastName) ?? "",
+                    id: id, relativeId: dto.relativeId, personProfileId: dto.personProfileId, householdId: dto.householdId, firstName: clean(dto.firstName) ?? "", lastName: clean(dto.lastName) ?? "",
                     dni: clean(dto.dni), birthDate: LocalDate(iso: dto.birthDate), phoneNumber: clean(dto.phoneNumber),
                     kinship: dto.kinship, mobilityLevel: dto.mobilityLevel, emergencyContactName: clean(dto.emergencyContactName),
                     emergencyContactPhone: clean(dto.emergencyContactPhone))
@@ -125,12 +187,96 @@ enum CareNetworkService {
                 .filter { $0.status == nil || $0.status == "ACTIVE" }
                 .compactMap { dto in
                     guard let userId = dto.userId, let role = dto.responsibility.flatMap(CareRole.init(rawValue:)) else { return nil }
-                    return CareNetworkMember(userId: userId, role: role)
+                    return CareNetworkMember(userId: userId, role: role, fullName: clean(dto.fullName))
                 }
                 .sorted { $0.role < $1.role })
         case .error(let message, let code): return .error(message, code: code)
         }
     }
+
+    /// Names who each occurrence is for and who is responsible, since the agenda leaves the names empty:
+    /// "Tú" for the signed-in caregiver, "Otro cuidador" otherwise, and the assisted person from its profile id.
+    static func nameAgendaPeople(_ activities: [CareActivity]) async -> [CareActivity] {
+        var names: [Int64: String] = [:]
+        var caregivers: [Int64: CareCaregiver] = [:]
+        for person in await assistedPersons().value ?? [] {
+            if let profileId = person.personProfileId { names[profileId] = person.fullName }
+            for caregiver in await self.caregivers(assistedPersonId: person.id, householdId: person.householdId).value ?? [] {
+                caregivers[caregiver.id] = caregiver
+            }
+        }
+        return activities.map { activity in
+            var named = activity
+            if activity.assistedPerson == "Persona asistida", let profileId = activity.assistedPersonProfileId,
+               let name = names[profileId] {
+                named.assistedPerson = name
+            }
+            if activity.responsible == "Sin responsable", let caregiverId = activity.responsibleCaregiverId {
+                let caregiver = caregivers[caregiverId]
+                named.responsible = caregiver?.isMe == true ? "Tú" : caregiver?.fullName ?? "Otro cuidador"
+            }
+            return named
+        }
+    }
+
+    /// Caregivers of the assisted person, the signed-in one first.
+    static func caregivers(assistedPersonId: Int64, householdId: Int64?) async -> NetworkResult<[CareCaregiver]> {
+        // The household members bring the names the caregivers list lacks.
+        var names: [Int64: String] = [:]
+        if let householdId, case .success(let members) = await self.members(householdId: householdId) {
+            for member in members { if let name = member.fullName { names[member.userId] = name } }
+        }
+        let mineResult: NetworkResult<[CaregiverDto]> = await BaseRepository.safeCall {
+            try await SharedModule.apiClient.send("GET", "api/v1/caregivers")
+        }
+        let mine = Set((mineResult.value ?? []).compactMap(\.id))
+        let result: NetworkResult<[CaregiverDto]> = await BaseRepository.safeCall {
+            try await SharedModule.apiClient.send("GET", "api/v1/caregivers?assistedPersonId=\(assistedPersonId)")
+        }
+        switch result {
+        case .success(let list):
+            return .success(list
+                .filter { $0.status == nil || $0.status == "ACTIVE" }
+                .compactMap { dto in
+                    dto.id.map { CareCaregiver(id: $0, userId: dto.userId, isMe: mine.contains($0),
+                                               fullName: dto.userId.flatMap { names[$0] }) }
+                }
+                .sorted { $0.isMe && !$1.isMe })
+        case .error(let message, let code): return .error(message, code: code)
+        }
+    }
+
+    /// Creates the activity and its schedule; empty `days` means a one-time occurrence on `date`.
+    static func createActivity(person: AssistedPerson, type: CareActivityType, title: String, description: String?,
+                               caregiverId: Int64?, date: LocalDate, days: Set<Weekday>, start: LocalTime,
+                               end: LocalTime) async -> NetworkResult<Int64> {
+        await BaseRepository.safeCall {
+            let activityId: Int64 = try await SharedModule.apiClient.send(
+                "POST", "api/v1/activities",
+                body: CreateCareActivityRequest(relativeId: person.relativeId, assistedPersonId: person.id, type: type.rawValue,
+                                                title: title, description: description))
+            let _: Int64 = try await SharedModule.apiClient.send(
+                "POST", "api/v1/activities/\(activityId)/assignments",
+                body: AssignCareActivityRequest(
+                    relativeId: person.relativeId, caregiverId: caregiverId,
+                    scheduleType: days.isEmpty ? "ONE_TIME" : "WEEKLY",
+                    days: days.isEmpty ? nil : days.sorted().map(\.rawValue),
+                    date: days.isEmpty ? iso(date) : nil,
+                    startTime: hour(start), endTime: hour(end)))
+            return activityId
+        }
+    }
+
+    static func complete(activityId: Int64, assignmentId: Int64, date: LocalDate, notes: String?) async -> NetworkResult<Void> {
+        await BaseRepository.safeCall {
+            try await SharedModule.apiClient.sendWithoutResponse(
+                "POST", "api/v1/activity-logs/complete",
+                body: CompleteActivityRequest(careActivityId: activityId, assignmentId: assignmentId, date: iso(date), notes: notes))
+        }
+    }
+
+    private static func iso(_ date: LocalDate) -> String { String(format: "%04d-%02d-%02d", date.year, date.month, date.day) }
+    private static func hour(_ time: LocalTime) -> String { String(format: "%02d:%02d", time.hour, time.minute) }
 
     private static func clean(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -188,12 +334,12 @@ struct CareNetworkCard: View {
             if members.isEmpty {
                 Text("Todavía no hay otras personas en la red de cuidado.").font(AliviaFont.bodyMedium).foregroundStyle(AliviaColor.inkMuted)
             } else {
-                let principal = person?.emergencyContactName
+                let principal = members.first(where: { $0.role == .principal })?.fullName ?? person?.emergencyContactName
                 HStack(spacing: 14) {
                     HStack(spacing: -12) {
                         ForEach(Array(members.prefix(3).enumerated()), id: \.offset) { index, member in
                             let text = index == 2 && members.count > 3 ? "+\(members.count - 2)"
-                                : (member.role == .principal ? principal.map(careInitials) ?? "" : "")
+                                : member.fullName.map(careInitials) ?? (member.role == .principal ? principal.map(careInitials) ?? "" : "")
                             InitialsAvatar(text: text, container: index == 0 ? AliviaColor.tealSoft : AliviaColor.navySoft)
                         }
                     }
@@ -244,6 +390,7 @@ struct AssistedPersonCard: View {
 struct CareNetworkSheet: View {
     let members: [CareNetworkMember]
     let person: AssistedPerson?
+    var myFullName: String? = nil
 
     var body: some View {
         ScrollView {
@@ -268,18 +415,24 @@ struct CareNetworkSheet: View {
                     if !group.isEmpty {
                         SectionLabel(text: role.groupLabel).padding(.top, 4)
                         AliviaCard {
-                            ForEach(Array(group.enumerated()), id: \.offset) { index, _ in
+                            ForEach(Array(group.enumerated()), id: \.offset) { index, member in
                                 if index > 0 { Divider() }
-                                let name = role == .principal ? person?.emergencyContactName : nil
+                                let name = member.fullName ?? (role == .principal ? person?.emergencyContactName : nil)
+                                let isMe = name != nil && name == myFullName
                                 HStack(spacing: 12) {
-                                    InitialsAvatar(text: name.map(careInitials) ?? "", size: 36)
+                                    InitialsAvatar(text: name.map(careInitials) ?? "", size: 40,
+                                                   container: isMe ? AliviaColor.tealSoft : AliviaColor.navySoft)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(name ?? "\(role.label) \(index + 1)").font(AliviaFont.titleSmall).foregroundStyle(AliviaColor.navy)
-                                        Text(role == .principal ? "Familiar responsable" : role.label)
-                                            .font(AliviaFont.bodySmall).foregroundStyle(AliviaColor.inkMuted)
+                                        HStack(spacing: 6) {
+                                            Text(name ?? "\(role.label) \(index + 1)").font(AliviaFont.titleSmall)
+                                                .foregroundStyle(AliviaColor.navy)
+                                            if isMe { Pill(text: "Tú", container: AliviaColor.tealSoft, content: AliviaColor.tealDark) }
+                                        }
+                                        Text(subtitle(role)).font(AliviaFont.bodySmall).foregroundStyle(AliviaColor.inkMuted)
                                     }
                                     Spacer()
-                                    Text("Vinculado").font(AliviaFont.labelMedium).foregroundStyle(AliviaColor.tealDark)
+                                    Pill(text: "Vinculado", container: AliviaColor.tealSoft, content: AliviaColor.tealDark,
+                                         dot: AliviaColor.tealDark)
                                 }
                             }
                         }
@@ -297,6 +450,14 @@ struct CareNetworkSheet: View {
         .background(AliviaColor.surface)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+    }
+
+    private func subtitle(_ role: CareRole) -> String {
+        switch role {
+        case .principal: return "Familiar responsable · Principal"
+        case .caregiver: return "Cuidador de \(person?.firstName ?? "la persona asistida")"
+        case .guest: return "Acceso de solo lectura"
+        }
     }
 }
 

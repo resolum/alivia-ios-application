@@ -5,12 +5,23 @@ import SwiftUI
 struct CaregiverHousehold: Sendable {
     let alias: String
     let address: String?
+    /// The signed-in account's role in the home: PRINCIPAL, CAREGIVER or GUEST.
+    var myRole: String? = nil
+
+    /// Only the principal relative plans activities; caregivers and guests follow their schedule.
+    var canPlanActivities: Bool { myRole == "PRINCIPAL" }
 }
 
 nonisolated private struct HouseholdDto: Decodable {
+    struct MemberDto: Decodable {
+        var responsibility: String?
+        var status: String?
+    }
     var id: Int64?
     var alias: String?
     var formattedAddress: String?
+    /// For `/mine`, only the signed-in account's own membership.
+    var members: [MemberDto]?
 }
 
 enum CaregiverHouseholdService {
@@ -24,7 +35,9 @@ enum CaregiverHouseholdService {
             guard dto.id != nil else { return .success(nil) }
             let alias = dto.alias?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let address = dto.formattedAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return .success(CaregiverHousehold(alias: alias.isEmpty ? "Mi hogar" : alias, address: address.isEmpty ? nil : address))
+            let role = dto.members?.first { $0.status == nil || $0.status == "ACTIVE" }?.responsibility
+            return .success(CaregiverHousehold(alias: alias.isEmpty ? "Mi hogar" : alias, address: address.isEmpty ? nil : address,
+                                               myRole: role))
         case .error(_, 404): return .success(nil)
         case .error(let message, let code): return .error(message, code: code)
         }
@@ -42,6 +55,8 @@ final class CaregiverHomeViewModel {
     private(set) var activities: [CareActivity] = []
     private(set) var assistedPerson: AssistedPerson?
     private(set) var network: [CareNetworkMember] = []
+    /// Full name of the signed-in caregiver, to mark them as "Tú" in the care network.
+    private(set) var myFullName: String?
 
     private let getCareAgenda: GetCareAgendaUseCase
     private let getProfile: GetMyProfileUseCase
@@ -69,14 +84,18 @@ final class CaregiverHomeViewModel {
         async let agendaResult = getCareAgenda(today: today)
         async let profileResult = getProfile()
         async let householdResult = CaregiverHouseholdService.mine()
-        if case .success(let profile) = await profileResult, !profile.firstName.isEmpty { firstName = profile.firstName }
+        if case .success(let profile) = await profileResult {
+            if !profile.firstName.isEmpty { firstName = profile.firstName }
+            if !profile.fullName.isEmpty { myFullName = profile.fullName }
+        }
         if case .success(let home) = await householdResult { household = home }
         if case .success(let persons) = await CareNetworkService.assistedPersons(), let person = persons.first {
             assistedPerson = person
         }
         if let householdId = assistedPerson?.householdId,
            case .success(let members) = await CareNetworkService.members(householdId: householdId) {
-            network = members
+            // The assisted person's own account is a household member too; the card already shows them apart.
+            network = members.filter { $0.fullName == nil || $0.fullName != assistedPerson?.fullName }
         }
         switch await agendaResult {
         case .success(let data): activities = data
@@ -134,7 +153,8 @@ struct CaregiverHomeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await viewModel.load() } }
         }
-        .sheet(isPresented: $showingNetwork) { CareNetworkSheet(members: viewModel.network, person: viewModel.assistedPerson) }
+        .sheet(isPresented: $showingNetwork) { CareNetworkSheet(members: viewModel.network, person: viewModel.assistedPerson,
+                                                                       myFullName: viewModel.myFullName) }
         .sheet(isPresented: $showingPerson) {
             if let person = viewModel.assistedPerson {
                 AssistedPersonSheet(person: person, household: viewModel.household, today: viewModel.today)

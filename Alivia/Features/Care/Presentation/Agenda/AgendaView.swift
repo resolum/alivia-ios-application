@@ -4,6 +4,7 @@ struct AgendaView: View {
     let onOpenProfile: () -> Void
     let onOpenMedication: (String) -> Void
     let onOpenActivity: (CareActivity) -> Void
+    var onNewActivity: () -> Void = {}
     @State private var viewModel = AgendaViewModel(getCareAgenda: CareModule.getCareAgenda(),
                                                    getReminders: CareModule.getReminders(),
                                                    scheduler: CareModule.reminderScheduler)
@@ -13,13 +14,20 @@ struct AgendaView: View {
         let snapshot = viewModel.snapshot
         VStack(spacing: 0) {
             ScreenHeader(title: "Actividades", subtitle: snapshot.summary, onOpenProfile: onOpenProfile)
+            HStack(spacing: 10) {
+                modeSwitch
+                if viewModel.canCreate {
+                Button(action: onNewActivity) {
+                    Label("Nueva", systemImage: "plus").font(AliviaFont.labelLarge).foregroundStyle(.white)
+                        .padding(.horizontal, 16).frame(height: 44)
+                        .background(AliviaColor.navy, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    if !viewModel.reminders.isEmpty {
-                        GroupHeader(title: "Recordatorios pendientes", count: viewModel.reminders.count, noun: "recordatorio")
-                        ForEach(viewModel.reminders) { ReminderCard(reminder: $0, onOpenMedication: onOpenMedication, onOpenActivity: onOpenActivity) }
-                    }
-                    SectionLabel(text: "Lista de actividades").padding(.top, 8)
                     if let error = viewModel.error {
                         VStack(alignment: .leading, spacing: 4) {
                             ErrorBanner(message: error)
@@ -27,9 +35,32 @@ struct AgendaView: View {
                                 .foregroundStyle(AliviaColor.navyButton)
                         }
                     }
-                    if viewModel.loading {
+                    if viewModel.mode == .calendar {
+                        MonthCalendar(viewModel: viewModel)
+                        HStack {
+                            Text(Formats.longDay(viewModel.selectedDay)).font(AliviaFont.titleMedium).foregroundStyle(AliviaColor.navy)
+                            Spacer()
+                            let count = viewModel.selectedDayActivities.count
+                            Pill(text: count == 1 ? "1 actividad" : "\(count) actividades", container: AliviaColor.navySoft,
+                                 content: AliviaColor.navy)
+                        }
+                        if viewModel.monthLoading && viewModel.monthActivities.isEmpty {
+                            LoadingView()
+                        } else if viewModel.selectedDayActivities.isEmpty {
+                            AliviaCard {
+                                Text("No hay actividades este día.").font(AliviaFont.bodyMedium).foregroundStyle(AliviaColor.inkMuted)
+                            }
+                        }
+                        ForEach(viewModel.selectedDayActivities) {
+                            ActivityCard(activity: $0, onOpenMedication: onOpenMedication, onOpenActivity: onOpenActivity)
+                        }
+                    } else if viewModel.loading {
                         LoadingView()
                     } else {
+                        if !viewModel.reminders.isEmpty {
+                            GroupHeader(title: "Recordatorios pendientes", count: viewModel.reminders.count, noun: "recordatorio")
+                            ForEach(viewModel.reminders) { ReminderCard(reminder: $0, onOpenMedication: onOpenMedication, onOpenActivity: onOpenActivity) }
+                        }
                         let groups = snapshot.groups
                         if groups.isEmpty && viewModel.error == nil { EmptyAgenda() }
                         ForEach(groups) { group in
@@ -39,22 +70,98 @@ struct AgendaView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 4)
+                .padding(.top, 12)
                 .padding(.bottom, 24)
             }
-            .refreshable { await viewModel.load(refresh: true) }
+            .refreshable {
+                await viewModel.load(refresh: true)
+                if viewModel.mode == .calendar { await viewModel.loadMonth() }
+            }
         }
         .background(AliviaColor.background)
-        .onAppear { Task { await viewModel.load() } }
+        .onAppear {
+            Task {
+                await viewModel.loadRole()
+                await viewModel.load()
+                if viewModel.mode == .calendar { await viewModel.loadMonth() }
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await viewModel.load() } }
+        }
+        .onChange(of: viewModel.mode) { _, mode in
+            if mode == .calendar { Task { await viewModel.loadMonth() } }
+        }
+    }
+
+    private var modeSwitch: some View {
+        HStack(spacing: 0) {
+            ForEach([(AgendaViewMode.list, "Lista", "list.bullet"), (.calendar, "Calendario", "calendar")], id: \.1) { mode, label, icon in
+                let selected = viewModel.mode == mode
+                Button { viewModel.mode = mode } label: {
+                    Label(label, systemImage: icon).font(AliviaFont.labelLarge).foregroundStyle(AliviaColor.navy)
+                        .frame(maxWidth: .infinity).frame(height: 36)
+                        .background(selected ? AliviaColor.surface : .clear, in: RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(AliviaColor.navySoft, in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+private struct MonthCalendar: View {
+    @Bindable var viewModel: AgendaViewModel
+
+    private static let weekdays = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+    var body: some View {
+        let month = viewModel.month
+        let offset = (LocalDate.calendar.component(.weekday, from: month.date) + 5) % 7
+        let total = ((offset + viewModel.daysInMonth + 6) / 7) * 7
+        let today = Formats.today()
+        AliviaCard {
+            HStack {
+                Text(Formats.monthYear(month)).font(AliviaFont.titleLarge).foregroundStyle(AliviaColor.navy)
+                Spacer()
+                Button { Task { await viewModel.moveMonth(-1) } } label: { Image(systemName: "chevron.left").frame(width: 36, height: 36) }
+                    .accessibilityLabel("Mes anterior")
+                Button { Task { await viewModel.moveMonth(1) } } label: { Image(systemName: "chevron.right").frame(width: 36, height: 36) }
+                    .accessibilityLabel("Mes siguiente")
+            }
+            .foregroundStyle(AliviaColor.navy)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 6) {
+                ForEach(Self.weekdays, id: \.self) { Text($0).font(AliviaFont.labelSmall).foregroundStyle(AliviaColor.inkMuted) }
+                ForEach(0..<total, id: \.self) { index in
+                    let dayNumber = index - offset + 1
+                    if dayNumber >= 1 && dayNumber <= viewModel.daysInMonth {
+                        let date = month.plusDays(dayNumber - 1)
+                        let selected = date == viewModel.selectedDay
+                        Button { viewModel.selectedDay = date } label: {
+                            VStack(spacing: 2) {
+                                Text("\(dayNumber)").font(AliviaFont.bodyMedium).foregroundStyle(selected ? .white : AliviaColor.ink)
+                                Circle().fill(viewModel.daysWithActivities.contains(date)
+                                              ? (selected ? Color.white : AliviaColor.tealDark) : .clear)
+                                    .frame(width: 5, height: 5)
+                            }
+                            .frame(width: 40, height: 40)
+                            .background(selected ? AliviaColor.navy : (date == today ? AliviaColor.navySoft : .clear), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Color.clear.frame(height: 40)
+                    }
+                }
+            }
         }
     }
 }
 
-/// Medications open their administration; every other activity opens the activity detail.
+/// Every activity opens its detail, where it can be marked as completed. The medication administration screen needs
+/// `/api/v1/medication-administrations`, which the current backend does not expose.
 private func open(_ activity: CareActivity, _ onOpenMedication: (String) -> Void, _ onOpenActivity: (CareActivity) -> Void) {
-    if let administrationId = activity.administrationId { onOpenMedication(administrationId) } else { onOpenActivity(activity) }
+    onOpenActivity(activity)
 }
 
 private struct GroupHeader: View {
@@ -177,6 +284,7 @@ private struct EmptyAgenda: View {
 extension CareActivityType {
     var icon: String {
         switch self {
+        case .hygiene: return "hands.and.sparkles"
         case .medication: return "pills"
         case .appointment: return "stethoscope"
         case .therapy: return "figure.mind.and.body"

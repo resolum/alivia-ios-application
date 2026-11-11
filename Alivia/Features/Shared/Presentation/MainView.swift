@@ -43,16 +43,19 @@ struct MainView: View {
     let onOpenOrder: (Int64) -> Void
     let onOpenMedication: (String) -> Void
     let onOpenActivity: (CareActivity) -> Void
+    let onOpenNotifications: () -> Void
     let onSignOut: () -> Void
     @State private var tab: MainTab
 
     init(session: Session, onOpenOrder: @escaping (Int64) -> Void,
          onOpenMedication: @escaping (String) -> Void = { _ in },
-         onOpenActivity: @escaping (CareActivity) -> Void = { _ in }, onSignOut: @escaping () -> Void) {
+         onOpenActivity: @escaping (CareActivity) -> Void = { _ in }, onOpenNotifications: @escaping () -> Void = {},
+         onSignOut: @escaping () -> Void) {
         self.session = session
         self.onOpenOrder = onOpenOrder
         self.onOpenMedication = onOpenMedication
         self.onOpenActivity = onOpenActivity
+        self.onOpenNotifications = onOpenNotifications
         self.onSignOut = onSignOut
         _tab = State(initialValue: .home)
     }
@@ -74,28 +77,28 @@ struct MainView: View {
     private func content(for item: MainTab) -> some View {
         switch item {
         case .orders:
-            OrdersView(onOpenOrder: onOpenOrder, onOpenProfile: { tab = .profile })
+            OrdersView(onOpenOrder: onOpenOrder, onOpenProfile: onOpenNotifications)
         case .home where technician:
             TechnicianHomeView(onOpenOrder: onOpenOrder, onOpenSchedule: { tab = .schedule },
-                               onOpenOrders: { tab = .orders }, onOpenNotifications: { tab = .profile })
+                               onOpenOrders: { tab = .orders }, onOpenNotifications: onOpenNotifications)
         case .home:
-            CaregiverHomeView(onOpenActivities: { tab = .agenda }, onOpenNotifications: { tab = .profile })
+            CaregiverHomeView(onOpenActivities: { tab = .agenda }, onOpenNotifications: onOpenNotifications)
         case .schedule:
-            ScheduleView(onOpenProfile: { tab = .profile })
+            ScheduleView(onOpenProfile: onOpenNotifications)
         case .devices:
-            DevicesView(onOpenNotifications: { tab = .profile })
+            DevicesView(onOpenNotifications: onOpenNotifications)
         case .alerts:
             VStack(spacing: 0) {
-                ScreenHeader(title: MainTab.alerts.label, onOpenProfile: { tab = .profile })
+                ScreenHeader(title: MainTab.alerts.label, onOpenProfile: onOpenNotifications)
                 ComingSoonView(icon: MainTab.alerts.icon, title: "Muy pronto", description: "Aquí recibirás las alertas del hogar, con su prioridad y confirmación.")
             }
         case .history:
             VStack(spacing: 0) {
-                ScreenHeader(title: MainTab.history.label, onOpenProfile: { tab = .profile })
+                ScreenHeader(title: MainTab.history.label, onOpenProfile: onOpenNotifications)
                 ComingSoonView(icon: MainTab.history.icon, title: "Muy pronto", description: "Aquí verás los eventos del hogar: comandos de voz, actividades y alertas.")
             }
         case .agenda:
-            AgendaView(onOpenProfile: { tab = .profile }, onOpenMedication: onOpenMedication, onOpenActivity: onOpenActivity)
+            AgendaView(onOpenProfile: onOpenNotifications, onOpenMedication: onOpenMedication, onOpenActivity: onOpenActivity)
         case .profile:
             ProfileView(session: session, onSignOut: onSignOut)
         }

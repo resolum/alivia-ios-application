@@ -44,18 +44,20 @@ struct MainView: View {
     let onOpenMedication: (String) -> Void
     let onOpenActivity: (CareActivity) -> Void
     let onOpenNotifications: () -> Void
+    let onNewActivity: () -> Void
     let onSignOut: () -> Void
     @State private var tab: MainTab
 
     init(session: Session, onOpenOrder: @escaping (Int64) -> Void,
          onOpenMedication: @escaping (String) -> Void = { _ in },
          onOpenActivity: @escaping (CareActivity) -> Void = { _ in }, onOpenNotifications: @escaping () -> Void = {},
-         onSignOut: @escaping () -> Void) {
+         onNewActivity: @escaping () -> Void = {}, onSignOut: @escaping () -> Void) {
         self.session = session
         self.onOpenOrder = onOpenOrder
         self.onOpenMedication = onOpenMedication
         self.onOpenActivity = onOpenActivity
         self.onOpenNotifications = onOpenNotifications
+        self.onNewActivity = onNewActivity
         self.onSignOut = onSignOut
         _tab = State(initialValue: .home)
     }
@@ -98,7 +100,8 @@ struct MainView: View {
                 ComingSoonView(icon: MainTab.history.icon, title: "Muy pronto", description: "Aquí verás los eventos del hogar: comandos de voz, actividades y alertas.")
             }
         case .agenda:
-            AgendaView(onOpenProfile: onOpenNotifications, onOpenMedication: onOpenMedication, onOpenActivity: onOpenActivity)
+            AgendaView(onOpenProfile: onOpenNotifications, onOpenMedication: onOpenMedication, onOpenActivity: onOpenActivity,
+                       onNewActivity: onNewActivity)
         case .profile:
             ProfileView(session: session, onSignOut: onSignOut)
         }
